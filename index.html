@@ -2864,19 +2864,56 @@
     // Paste your Make.com Webhook URL or Google Apps Script Web App URL below:
     const WEBHOOK_URL = window.GREG_ESTIMATE_WEBHOOK_URL || "https://script.google.com/macros/s/AKfycbz4cgiqO_mONIptb4heAvClyt6DBHVDWW98A0bPPBVoHtZy5nwD5SfJgqD8cH23urL9/exec";
 
+    // Client-Side Image Optimizer: fast cellular upload (scales 8MB mobile camera pics to ~300KB)
     function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const base64 = (reader.result || '').split(',')[1] || '';
-          resolve({
-            filename: file.name,
-            mimeType: file.type || 'image/jpeg',
-            data: base64
-          });
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+      return new Promise((resolve) => {
+        if (file.type && file.type.startsWith('image/')) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              let width = img.width;
+              let height = img.height;
+              const maxDim = 1600;
+              if (width > maxDim || height > maxDim) {
+                if (width > height) {
+                  height = Math.round((height * maxDim) / width);
+                  width = maxDim;
+                } else {
+                  width = Math.round((width * maxDim) / height);
+                  height = maxDim;
+                }
+              }
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, width, height);
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+              const base64 = dataUrl.split(',')[1] || '';
+              resolve({
+                filename: file.name.replace(/\.[^/.]+$/, "") + ".jpg",
+                mimeType: "image/jpeg",
+                data: base64
+              });
+            };
+            img.onerror = () => {
+              const base64 = (e.target.result || '').split(',')[1] || '';
+              resolve({ filename: file.name, mimeType: file.type || 'image/jpeg', data: base64 });
+            };
+            img.src = e.target.result;
+          };
+          reader.onerror = () => resolve({ filename: file.name, mimeType: file.type || 'image/jpeg', data: '' });
+          reader.readAsDataURL(file);
+        } else {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64 = (reader.result || '').split(',')[1] || '';
+            resolve({ filename: file.name, mimeType: file.type || 'image/jpeg', data: base64 });
+          };
+          reader.onerror = () => resolve({ filename: file.name, mimeType: file.type || 'image/jpeg', data: '' });
+          reader.readAsDataURL(file);
+        }
       });
     }
 

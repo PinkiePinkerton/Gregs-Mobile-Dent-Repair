@@ -1,25 +1,19 @@
 /**
  * GREG'S MOBILE DENT REPAIR - LEAD ROUTER & DUAL ALERT SYSTEM
  * 
- * Instructions:
- * 1. Open your target Google Sheet (e.g. "Greg's Dent Repair - Website Leads").
- * 2. Click "Extensions" > "Apps Script".
- * 3. Delete any code in the editor and paste this entire script.
- * 4. Click "Deploy" > "New deployment".
- * 5. Select type: "Web app".
- * 6. Set Description: "Lead Webhook".
- * 7. Set "Execute as": "Me".
- * 8. Set "Who has access": "Anyone" (allows website form submissions).
- * 9. Click "Deploy", authorize permissions, and copy the Web App URL.
- * 10. Paste the Web App URL into index.html (const GOOGLE_SCRIPT_URL = "...")
+ * Features:
+ * - Logs all leads to Google Sheets with Arizona timestamp.
+ * - Saves customer dent photos to Google Drive in a dedicated folder.
+ * - Embeds clickable photo links in the Google Sheet.
+ * - Sends full email alert to Greg with clickable photo links AND direct file attachments.
+ * - Sends instant SMS alert to Greg's cell phone across major carriers.
  */
 
 // CONFIGURATION
 const GREG_EMAIL = "greg.napier37@gmail.com";
 
 // Greg's phone: (602) 316-9263
-// Email-to-SMS carrier gateways (sends instant text alert to Greg's phone):
-// Note: Enter Greg's specific carrier gateway, or leave all three active so it reaches him regardless of carrier.
+// Major US Carrier Email-to-SMS Gateways:
 const GREG_SMS_GATEWAYS = [
   "6023169263@vtext.com",     // Verizon
   "6023169263@tmomail.net",   // T-Mobile
@@ -56,8 +50,9 @@ function doPost(e) {
       sheet.setFrozenRows(1);
     }
 
-    // 2. Process photo uploads into Google Drive
+    // 2. Process photo uploads into Google Drive & email attachments
     var photoLinks = [];
+    var photoBlobs = [];
     if (data.photos && data.photos.length > 0) {
       var folder = getOrCreateFolder(PHOTO_FOLDER_NAME);
       for (var i = 0; i < data.photos.length; i++) {
@@ -68,6 +63,7 @@ function doPost(e) {
             var safeCustomer = (data.name || "Customer").replace(/[^a-zA-Z0-9]/g, "_");
             var filename = safeCustomer + "_" + (photo.filename || ("photo_" + (i + 1) + ".jpg"));
             var blob = Utilities.newBlob(decoded, photo.mimeType || "image/jpeg", filename);
+            photoBlobs.push(blob);
             var file = folder.createFile(blob);
             file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
             photoLinks.push(file.getUrl());
@@ -93,8 +89,8 @@ function doPost(e) {
     ];
     sheet.appendRow(rowData);
 
-    // 4. Send full email notification to Greg
-    sendEmailNotification(data, photoLinks);
+    // 4. Send full email notification to Greg (with clickable links and direct photo attachments)
+    sendEmailNotification(data, photoLinks, photoBlobs);
 
     // 5. Send instant SMS text alert to Greg's phone
     sendSmsNotification(data);
@@ -117,16 +113,16 @@ function getOrCreateFolder(folderName) {
   return DriveApp.createFolder(folderName);
 }
 
-function sendEmailNotification(data, photoLinks) {
+function sendEmailNotification(data, photoLinks, photoBlobs) {
   var customerName = data.name || "New Customer";
   var vehicle = data.vehicle || "Vehicle";
   var subject = "⚡ NEW ESTIMATE REQUEST: " + customerName + " (" + vehicle + ")";
 
   var photoHtml = "";
   if (photoLinks && photoLinks.length > 0) {
-    photoHtml = "<p style='margin-top:16px;'><strong>Customer Photos:</strong></p><ul style='margin:4px 0 0 18px;'>";
+    photoHtml = "<p style='margin-top:16px;'><strong>Customer Photos (Also Attached to Email):</strong></p><ul style='margin:4px 0 0 18px;'>";
     for (var i = 0; i < photoLinks.length; i++) {
-      photoHtml += '<li style="margin-bottom:6px;"><a href="' + photoLinks[i] + '" target="_blank" style="color:#0077FF; font-weight:bold;">View Uploaded Photo ' + (i + 1) + '</a></li>';
+      photoHtml += '<li style="margin-bottom:6px;"><a href="' + photoLinks[i] + '" target="_blank" style="color:#0077FF; font-weight:bold;">View Full Resolution Photo ' + (i + 1) + '</a></li>';
     }
     photoHtml += "</ul>";
   } else {
@@ -155,15 +151,20 @@ function sendEmailNotification(data, photoLinks) {
       '</div>' +
     '</div>';
 
-  MailApp.sendEmail({
+  var mailOptions = {
     to: GREG_EMAIL,
     subject: subject,
     htmlBody: htmlBody
-  });
+  };
+
+  if (photoBlobs && photoBlobs.length > 0) {
+    mailOptions.attachments = photoBlobs;
+  }
+
+  MailApp.sendEmail(mailOptions);
 }
 
 function sendSmsNotification(data) {
-  // Ultra-concise plain text alert under 140 characters to ensure 100% single-packet SMS delivery
   var name = data.name || "Customer";
   var phone = data.phone || "";
   var vehicle = data.vehicle || "";
