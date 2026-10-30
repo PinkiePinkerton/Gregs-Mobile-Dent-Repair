@@ -6,18 +6,20 @@
  * - Saves customer dent photos to Google Drive in a dedicated folder.
  * - Embeds clickable photo links in the Google Sheet.
  * - Sends full email alert to Greg with clickable photo links AND direct file attachments.
- * - Sends instant SMS alert to Greg's cell phone across major carriers.
+ * - Sends instant SMS alert to Greg's cell phone with 1-tap clickable photo link.
  */
 
 // CONFIGURATION
 const GREG_EMAIL = "greg.napier37@gmail.com";
 
 // Greg's phone: (602) 316-9263
-// Major US Carrier Email-to-SMS Gateways:
+// Carrier SMS & MMS Gateways (MMS addresses reliably support longer text and clickable URLs):
 const GREG_SMS_GATEWAYS = [
-  "6023169263@vtext.com",     // Verizon
-  "6023169263@tmomail.net",   // T-Mobile
-  "6023169263@txt.att.net"    // AT&T
+  "6023169263@vtext.com",     // Verizon SMS
+  "6023169263@vzwpix.com",    // Verizon MMS (supports clickable links)
+  "6023169263@tmomail.net",   // T-Mobile MMS/SMS
+  "6023169263@txt.att.net",   // AT&T SMS
+  "6023169263@mms.att.net"    // AT&T MMS (supports clickable links)
 ];
 
 // Name of Google Drive folder for saving customer photos
@@ -92,8 +94,8 @@ function doPost(e) {
     // 4. Send full email notification to Greg (with clickable links and direct photo attachments)
     sendEmailNotification(data, photoLinks, photoBlobs);
 
-    // 5. Send instant SMS text alert to Greg's phone
-    sendSmsNotification(data);
+    // 5. Send instant SMS text alert to Greg's phone with 1-tap photo link
+    sendSmsNotification(data, photoLinks);
 
     return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -164,16 +166,23 @@ function sendEmailNotification(data, photoLinks, photoBlobs) {
   MailApp.sendEmail(mailOptions);
 }
 
-function sendSmsNotification(data) {
+function sendSmsNotification(data, photoLinks) {
   var name = data.name || "Customer";
   var phone = data.phone || "";
   var vehicle = data.vehicle || "";
-  var desc = (data.description || "").substring(0, 40);
+  var desc = (data.description || "").substring(0, 35);
 
-  var smsBody = "⚡ NEW LEAD: " + name + "\n" +
+  var photoLine = "";
+  if (photoLinks && photoLinks.length > 0) {
+    photoLine = "\nPhoto: " + photoLinks[0];
+  }
+
+  var smsBody = "⚡ NEW DENT LEAD:\n" +
+                name + "\n" +
                 phone + "\n" +
                 vehicle + "\n" +
-                desc + (data.description && data.description.length > 40 ? "..." : "");
+                desc + (data.description && data.description.length > 35 ? "..." : "") +
+                photoLine;
 
   for (var i = 0; i < GREG_SMS_GATEWAYS.length; i++) {
     try {
