@@ -2975,12 +2975,13 @@
         localStorage.setItem('gregs_estimates', JSON.stringify(stored));
       } catch (e) {}
 
-      // Dispatch to Make.com Webhook or Google Apps Script
+      // Dispatch to Google Apps Script Web App (mode: no-cors with text/plain prevents browser CORS preflight blocking)
       if (WEBHOOK_URL && WEBHOOK_URL.startsWith('http')) {
         try {
           await fetch(WEBHOOK_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify(payload)
           });
         } catch (fetchErr) {
