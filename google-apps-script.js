@@ -5,24 +5,24 @@
  * - Logs all leads to Google Sheets with Arizona timestamp.
  * - Saves customer dent photos to Google Drive in a dedicated folder.
  * - Embeds clickable photo links in the Google Sheet.
- * - Sends full email alert to BOTH Greg and Chris with photo attachments and reply-to set to customer.
+ * - Sends clean HTML email alert to Greg & Chris with sanitized tap-to-call/text links and direct photo attachments.
  * - Sends instant SMS alert to Greg's cell phone with 1-tap clickable photo link.
  */
 
-// CONFIGURATION
+// CONFIGURATION: Both Greg and Chris receive full lead notifications
 const RECIPIENT_EMAILS = [
   "greg.napier37@gmail.com",
   "chris@gotsmc.com"
 ];
 
 // Greg's phone: (602) 316-9263
-// Carrier SMS & MMS Gateways (MMS addresses reliably support longer text and clickable URLs):
+// Carrier SMS & MMS Gateways:
 const GREG_SMS_GATEWAYS = [
   "6023169263@vtext.com",     // Verizon SMS
-  "6023169263@vzwpix.com",    // Verizon MMS (supports clickable links)
+  "6023169263@vzwpix.com",    // Verizon MMS
   "6023169263@tmomail.net",   // T-Mobile MMS/SMS
   "6023169263@txt.att.net",   // AT&T SMS
-  "6023169263@mms.att.net"    // AT&T MMS (supports clickable links)
+  "6023169263@mms.att.net"    // AT&T MMS
 ];
 
 // Name of Google Drive folder for saving customer photos
@@ -94,10 +94,10 @@ function doPost(e) {
     ];
     sheet.appendRow(rowData);
 
-    // 4. Send full email notification to Greg AND Chris (with clickable links and direct photo attachments)
+    // 4. Send clean email notification to Greg AND Chris independently
     sendEmailNotification(data, photoLinks, photoBlobs);
 
-    // 5. Send instant SMS text alert to Greg's phone with 1-tap photo link
+    // 5. Send instant SMS text alert to Greg's phone with photo link
     sendSmsNotification(data, photoLinks);
 
     return ContentService.createTextOutput(JSON.stringify({ status: "success" }))
@@ -121,6 +121,13 @@ function getOrCreateFolder(folderName) {
 function sendEmailNotification(data, photoLinks, photoBlobs) {
   var customerName = data.name || "New Customer";
   var vehicle = data.vehicle || "Vehicle";
+  var rawPhone = data.phone || "";
+  var cleanPhone = rawPhone.replace(/[^0-9]/g, "");
+  if (cleanPhone.length === 10) {
+    cleanPhone = "1" + cleanPhone;
+  }
+  var phoneHref = cleanPhone ? "tel:+" + cleanPhone : "";
+
   var subject = "⚡ NEW ESTIMATE REQUEST: " + customerName + " (" + vehicle + ")";
 
   var photoHtml = "";
@@ -143,16 +150,14 @@ function sendEmailNotification(data, photoLinks, photoBlobs) {
       '<div style="padding: 24px; background-color: #ffffff; color: #333333; line-height: 1.6;">' +
         '<table style="width: 100%; border-collapse: collapse;">' +
           '<tr><td style="padding: 8px 0; font-weight: bold; width: 130px; color:#54595F;">Name:</td><td style="padding: 8px 0; font-size:16px; font-weight:bold;">' + (data.name || "N/A") + '</td></tr>' +
-          '<tr><td style="padding: 8px 0; font-weight: bold; color:#54595F;">Phone:</td><td style="padding: 8px 0;"><a href="tel:' + (data.phone || "") + '" style="color: #0077FF; font-weight: bold; font-size:16px; text-decoration: none;">' + (data.phone || "N/A") + '</a></td></tr>' +
-          '<tr><td style="padding: 8px 0; font-weight: bold; color:#54595F;">Email:</td><td style="padding: 8px 0;"><a href="mailto:' + (data.email || "") + '">' + (data.email || "N/A") + '</a></td></tr>' +
+          '<tr><td style="padding: 8px 0; font-weight: bold; color:#54595F;">Phone:</td><td style="padding: 8px 0;">' + 
+            (cleanPhone ? '<a href="' + phoneHref + '" style="color: #0077FF; font-weight: bold; font-size:18px; text-decoration: underline;">' + rawPhone + '</a> <span style="font-size:12px; color:#777; margin-left:6px;">(Tap to call/text)</span>' : (rawPhone || "N/A")) + 
+          '</td></tr>' +
+          '<tr><td style="padding: 8px 0; font-weight: bold; color:#54595F;">Email:</td><td style="padding: 8px 0;"><a href="mailto:' + (data.email || "") + '" style="color: #0077FF;">' + (data.email || "N/A") + '</a></td></tr>' +
           '<tr><td style="padding: 8px 0; font-weight: bold; color:#54595F;">Vehicle:</td><td style="padding: 8px 0; font-weight: bold; color: #322878; font-size:16px;">' + (data.vehicle || "N/A") + '</td></tr>' +
           '<tr><td style="padding: 8px 0; font-weight: bold; color:#54595F; vertical-align: top;">Dent Details:</td><td style="padding: 10px; background: #F9F9FE; border-radius: 4px; border:1px solid #E2E8F0;">' + (data.description || "N/A") + '</td></tr>' +
         '</table>' +
         photoHtml +
-        '<div style="margin-top: 26px; text-align: center;">' +
-          '<a href="sms:' + (data.phone || "") + '" style="display: inline-block; background-color: #FFA500; color: #000000; padding: 12px 20px; text-decoration: none; font-weight: bold; border-radius: 6px; margin: 6px;">Tap to Text Customer</a>' +
-          '<a href="tel:' + (data.phone || "") + '" style="display: inline-block; background-color: #322878; color: #ffffff; padding: 12px 20px; text-decoration: none; font-weight: bold; border-radius: 6px; margin: 6px;">Tap to Call Customer</a>' +
-        '</div>' +
       '</div>' +
     '</div>';
 
