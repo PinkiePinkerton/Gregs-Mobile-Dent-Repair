@@ -5,12 +5,15 @@
  * - Logs all leads to Google Sheets with Arizona timestamp.
  * - Saves customer dent photos to Google Drive in a dedicated folder.
  * - Embeds clickable photo links in the Google Sheet.
- * - Sends full email alert to Greg with clickable photo links AND direct file attachments.
+ * - Sends full email alert to BOTH Greg and Chris with photo attachments and reply-to set to customer.
  * - Sends instant SMS alert to Greg's cell phone with 1-tap clickable photo link.
  */
 
 // CONFIGURATION
-const GREG_EMAIL = "greg.napier37@gmail.com";
+const RECIPIENT_EMAILS = [
+  "greg.napier37@gmail.com",
+  "chris@gotsmc.com"
+];
 
 // Greg's phone: (602) 316-9263
 // Carrier SMS & MMS Gateways (MMS addresses reliably support longer text and clickable URLs):
@@ -91,7 +94,7 @@ function doPost(e) {
     ];
     sheet.appendRow(rowData);
 
-    // 4. Send full email notification to Greg (with clickable links and direct photo attachments)
+    // 4. Send full email notification to Greg AND Chris (with clickable links and direct photo attachments)
     sendEmailNotification(data, photoLinks, photoBlobs);
 
     // 5. Send instant SMS text alert to Greg's phone with 1-tap photo link
@@ -153,17 +156,24 @@ function sendEmailNotification(data, photoLinks, photoBlobs) {
       '</div>' +
     '</div>';
 
-  var mailOptions = {
-    to: GREG_EMAIL,
-    subject: subject,
-    htmlBody: htmlBody
-  };
+  for (var i = 0; i < RECIPIENT_EMAILS.length; i++) {
+    try {
+      var mailOptions = {
+        to: RECIPIENT_EMAILS[i],
+        replyTo: data.email || "",
+        subject: subject,
+        htmlBody: htmlBody
+      };
 
-  if (photoBlobs && photoBlobs.length > 0) {
-    mailOptions.attachments = photoBlobs;
+      if (photoBlobs && photoBlobs.length > 0) {
+        mailOptions.attachments = photoBlobs;
+      }
+
+      MailApp.sendEmail(mailOptions);
+    } catch (err) {
+      console.error("Error sending to " + RECIPIENT_EMAILS[i] + ":", err);
+    }
   }
-
-  MailApp.sendEmail(mailOptions);
 }
 
 function sendSmsNotification(data, photoLinks) {
